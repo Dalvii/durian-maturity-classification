@@ -1,0 +1,17 @@
+[project]
+name = "durian-maturity-classification"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Antoine Maïstre-Rice", email = "antoinemaitre06@gmail.com"}
+]
+requires-python = ">=3.11"  # Change >=3.13 si t'as pas Python 3.13
+dependencies = []
+
+readme = "README.md"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+package-mode = false
