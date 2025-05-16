@@ -6,7 +6,7 @@ authors = [
     {name = "Antoine Maïstre-Rice", email = "antoinemaitre06@gmail.com"}
 ]
 requires-python = ">=3.11" 
-dependencies = []
+dependencies = ["tensorflow (>=2.19.0,<3.0.0)", "librosa (>=0.11.0,<0.12.0)", "matplotlib (>=3.10.3,<4.0.0)"]
 
 readme = "README.md"
 
