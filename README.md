@@ -9,6 +9,7 @@ This repository contains the code, data, and notebooks used to develop a **non�
 ```plaintext
 AUDIO_DATA/            # Original WAV recordings and precomputed spectrograms
 clean/AUDIO_DATA/      # Cleaned audio dataset and processing notebook
+models/                # Trained models
 data_preparation/      # Scripts and utilities for data ingestion and preprocessing
 src/                   # Core Python modules (feature extraction, model definition)
 clean_dataset.ipynb    # Jupyter notebook: end‑to‑end data cleaning and MFCC pipeline
