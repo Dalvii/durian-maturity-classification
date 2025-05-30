@@ -52,27 +52,28 @@ export default function ClassificationScreen() {
   const sendToApi = async () => {
     if (!audioUri) return;
     setLoading(true);
-
-    const form = new FormData();
-    form.append('file', {
-      uri: audioUri,
-      name: audioName ?? 'durian.wav',
-      type: 'audio/wav'
-    } as any);
-
     try {
-      const response = await fetch(
-        'https://n8n.vktnas.synology.me/webhook/durian',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'multipart/form-data' },
-          body: form
-        }
-      );
-      const json = await response.json();
-      console.log('API Response:', json);
+      // Step 1: get upload URL
+      const urlResponse = await fetch('https://n8n.vktnas.synology.me/webhook/durian-url');
+      const { uploadUrl } = await urlResponse.json();
+      console.log('Upload URL:', uploadUrl);
+
+      // Step 2: upload file to obtained URL
+      const form = new FormData();
+      form.append('file', {
+        uri: audioUri,
+        name: audioName ?? 'durian.wav',
+        type: 'audio/wav'
+      } as any);
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: form
+      });
+      const json = await uploadResponse.json();
       setResult({ type: json.type, confidence: json.confidence });
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Unable to contact the API.');
     } finally {
       setLoading(false);
@@ -99,7 +100,7 @@ export default function ClassificationScreen() {
       <AudioRecorder onRecordingComplete={onRecordingComplete} />
 
       <TouchableOpacity style={styles.button} onPress={pickAudio}>
-        <Text style={styles.buttonText}>Choose Audio File</Text>
+        <Text style={styles.buttonText}>📁 Choose Audio File</Text>
       </TouchableOpacity>
 
       {audioName && <Text style={styles.fileName}>{audioName}</Text>}

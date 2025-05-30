@@ -69,7 +69,7 @@ export default function AudioRecorder({ onRecordingComplete }: Props) {
         onPress={isRecording ? stop : start}
       >
         <Text style={styles.buttonText}>
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
+          {isRecording ? 'Stop Recording' : '🎤 Start Recording'}
         </Text>
       </TouchableOpacity>
     </View>
