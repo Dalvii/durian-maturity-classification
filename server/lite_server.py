@@ -59,8 +59,8 @@ def redim(mfcc_fixed):
 async def exec_full_data_pipeline(file):
     global nb_tmp
     file_name = f"tmp_{nb_tmp}"
-    file_path = os.path.join("server", "tmp", file_name)
-    os.makedirs("server/tmp", exist_ok=True)
+    file_path = os.path.join("tmp", file_name)
+    os.makedirs("tmp", exist_ok=True)
     await file.save(file_path)
     y, sr = load_audio(file_path)
     os.remove(file_path)
@@ -100,7 +100,7 @@ async def upload():
     return jsonify(resp), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', port=5000)
 
 
 
