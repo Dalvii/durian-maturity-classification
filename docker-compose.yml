@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  durian-server:
+    build:
+      context: server
+      dockerfile: Dockerfile
+    container_name: durian-server
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./models:/server/models
+      - ./server/tmp:/server/server/tmp
+    environment:
+      - PYTHONPATH=/server
+    restart: unless-stopped
