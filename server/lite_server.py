@@ -1,3 +1,4 @@
+import sys
 import onnxruntime as ort
 import numpy as np
 import os
@@ -6,13 +7,20 @@ import librosa
 import numpy as np
 from quart import Quart, jsonify, request
 
-app = Quart(__name__)
-session = ort.InferenceSession(os.path.join("models", "onnx", "model_v2_(0.51, 0.89)_.onnx"))
+# Handle docker/local path flexibility 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+model_path = os.path.join(BASE_DIR, "server_models", "model_v2_(0.51, 0.89)_.onnx")
+
+# load onnx model
+session = ort.InferenceSession(model_path)
 input_name = session.get_inputs()[0].name
 
+# handle global server variables
 nb_tmp = 0
+max_t = 273 # value found in the data_preparation.py notebook
 
-max_t = 273 # value from the notebook
+app = Quart(__name__)
 
 def load_audio(path: str):
     y, sr = librosa.load(path, sr=None)
@@ -55,6 +63,7 @@ async def exec_full_data_pipeline(file):
     os.makedirs("server/tmp", exist_ok=True)
     await file.save(file_path)
     y, sr = load_audio(file_path)
+    os.remove(file_path)
     nb_tmp+=1
     mfcc = compute_mfcc(y, sr)
     fixed = get_mfcc_fixed(mfcc)
