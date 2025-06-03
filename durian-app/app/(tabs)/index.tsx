@@ -60,7 +60,7 @@ export default function ClassificationScreen() {
 
       // Step 2: upload file to obtained URL
       const form = new FormData();
-      form.append('file', {
+      form.append('audio', {
         uri: audioUri,
         name: audioName ?? 'durian.wav',
         type: 'audio/wav'
@@ -72,6 +72,7 @@ export default function ClassificationScreen() {
         body: form
       });
       const json = await uploadResponse.json();
+      console.log('API Response:', json);
       setResult({ type: json.type, confidence: json.confidence });
     } catch {
       Alert.alert('Error', 'Unable to contact the API.');

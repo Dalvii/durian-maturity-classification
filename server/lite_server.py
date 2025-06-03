@@ -10,6 +10,7 @@ from pydub import AudioSegment
 from quart.datastructures import FileStorage
 
 BASE_DIR = Path(__file__).resolve().parent
+print(f"Base directory: {BASE_DIR}")
 model_path = BASE_DIR / "server_models" / "model_v2_(0.51, 0.89)_.onnx"
 
 # load onnx model
@@ -81,10 +82,12 @@ async def upload():
     file: FileStorage = files['audio']
     filename = file.filename
 
-    supported_file_types = ["wav", "m4a", "mp4", "wave"]
+    supported_file_types = ["wav", "m4a", "mp4", "wave", "x-m4a"]
     file_type: str = file.content_type.split("/")[1] # type: ignore
+    print(f"File content_type: {file.content_type}")
+    print(f"File type: {file_type}")
     if file_type not in supported_file_types:
-        return jsonify({'error': f'File type is not supported are supported. \nSupported types : [{', '.join(supported_file_types)}]'}), 400
+        return jsonify({'error': f'File type {file_type} is not supported are supported. \nSupported types : [{', '.join(supported_file_types)}]'}), 400
     
     if file_type in ["m4a", "mp4"]:
         tmp_dir = BASE_DIR / "tmp"
@@ -109,7 +112,7 @@ async def upload():
 
     resp = {
         'type': durian_class,
-        'confidence:': confidence
+        'confidence': confidence
     }
     print(resp)
     return jsonify(resp), 200
