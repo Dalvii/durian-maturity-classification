@@ -1,4 +1,4 @@
-import sys
+from pathlib import Path
 import onnxruntime as ort
 import numpy as np
 import os
@@ -6,11 +6,11 @@ from typing import Literal
 import librosa
 import numpy as np
 from quart import Quart, jsonify, request
+from pydub import AudioSegment
+from quart.datastructures import FileStorage
 
-# Handle docker/local path flexibility 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
-model_path = os.path.join(BASE_DIR, "server_models", "model_v2_(0.51, 0.89)_.onnx")
+BASE_DIR = Path(__file__).resolve().parent
+model_path = BASE_DIR / "server_models" / "model_v2_(0.51, 0.89)_.onnx"
 
 # load onnx model
 session = ort.InferenceSession(model_path)
@@ -56,13 +56,16 @@ def redim(mfcc_fixed):
     result = result[..., np.newaxis]
     return result
 
-async def exec_full_data_pipeline(file):
+async def exec_full_data_pipeline(file: str | FileStorage):
     global nb_tmp
-    file_name = f"tmp_{nb_tmp}"
-    file_path = os.path.join("tmp", file_name)
-    os.makedirs("tmp", exist_ok=True)
-    await file.save(file_path)
-    y, sr = load_audio(file_path)
+    if (isinstance(file, str)):
+        file_path = Path(file)
+    else:
+        file_path = BASE_DIR / "tmp" / f"tmp_{nb_tmp}.wav"
+        (BASE_DIR / "tmp").mkdir(exist_ok=True)
+        await file.save(file_path)
+        
+    y, sr = load_audio(str(file_path))
     os.remove(file_path)
     nb_tmp+=1
     mfcc = compute_mfcc(y, sr)
@@ -75,14 +78,26 @@ async def upload():
     if 'audio' not in files:
         return jsonify({'error': 'No files received'}), 400
 
-    file = files['audio']
+    file: FileStorage = files['audio']
     filename = file.filename
 
-    if not filename.endswith('.wav'):
-        return jsonify({'error': 'Only wav files are supported'}), 400
+    supported_file_types = ["wav", "m4a", "mp4", "wave"]
+    file_type: str = file.content_type.split("/")[1] # type: ignore
+    if file_type not in supported_file_types:
+        return jsonify({'error': f'File type is not supported are supported. \nSupported types : [{', '.join(supported_file_types)}]'}), 400
     
-    print(file)
-    x = await exec_full_data_pipeline(file)
+    if file_type in ["m4a", "mp4"]:
+        tmp_dir = BASE_DIR / "tmp"
+        tmp_dir.mkdir(exist_ok=True)
+        file_path = (tmp_dir / f"tmp_m4a_to_wav_{nb_tmp}").with_suffix(f".{file_type}")
+        await file.save(file_path)
+        sound = AudioSegment.from_file(file_path, format=file_type)
+        os.remove(file_path)
+        sound.export(file_path.with_suffix(".wav"), format='wav')
+        x = await exec_full_data_pipeline(str(file_path.with_suffix(".wav")))
+    else:
+        x = await exec_full_data_pipeline(file)
+        
     pred: np.ndarray = session.run(None, {input_name: x.astype(np.float32)})[0] # type: ignore
     result = float(pred[0][0])
 
