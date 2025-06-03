@@ -96,7 +96,7 @@ export default function ClassificationScreen() {
         style={styles.icon}
         resizeMode="contain"
       />
-      <Text style={styles.title}>Durian Classification</Text>
+      <Text style={styles.title}>Durian Ripe Classification</Text>
 
       <AudioRecorder onRecordingComplete={onRecordingComplete} />
 
