@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import date, timezone
 import datetime
 from pathlib import Path
+from tkinter import Label
 import typing
 from click import DateTime
 import onnxruntime as ort
@@ -14,7 +15,6 @@ from quart import Quart, jsonify, request, send_file
 from pydub import AudioSegment
 from quart.datastructures import FileStorage
 from werkzeug.datastructures import MultiDict
-
 
 BASE_DIR = Path(__file__).resolve().parent
 print(f"Base directory: {BASE_DIR}")
@@ -35,6 +35,10 @@ app = Quart(__name__)
 class DateUtils:
     datetime_storage_pattern = "%Y-%m-%d_%H-%M-%S"
     datetime_response_pattern = "%Y-%m-%dT%H:%M:%SZ"
+
+class LabelUtils:
+    type LabelType = Literal["mature", "immature", "overripe"] 
+    allowed_labels = ["mature", "immature", "overripe"] 
 
 def load_audio(path: str):
     y, sr = librosa.load(path, sr=None)
@@ -122,7 +126,7 @@ async def upload():
     pred: np.ndarray = session.run(None, {input_name: x.astype(np.float32)})[0] # type: ignore
     result = float(pred[0][0])
 
-    durian_class: Literal["mature", "immature", "overripe"] | None = None
+    durian_class: LabelUtils.LabelType | None = None
     
     durian_class = "mature" if (result > 0.5) else "overripe"    
 
@@ -142,6 +146,10 @@ async def add_training_data():
     if name != "audio" or not isinstance(content, FileStorage):
         return jsonify({'error': 'No files received'}), 400
     label: str = form.get("label") #type: ignore
+    
+    if label not in LabelUtils.allowed_labels:
+        return {"error": f"label must be in : [{", ".join(LabelUtils.allowed_labels)}]"}, 400
+        
     converted: Path = await save_conversion(content, out_dir = BASE_DIR / "train_submitted", label=label)
     return {"message": "file successfully created"}, 200
 
