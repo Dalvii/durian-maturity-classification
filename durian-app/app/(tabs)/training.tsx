@@ -39,11 +39,16 @@ export default function TrainingScreen() {
       } as any);
       form.append('label', selectedLabel);
 
-      await fetch(uploadUrl, {
+      console.log('Uploading to:', uploadUrl);
+
+      const res = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'multipart/form-data' },
         body: form
       });
+
+      const json = await res.json();
+      console.log('API Response:', json);
 
       Alert.alert('Success', 'Training data uploaded!');
       setAudioUri(null);
