@@ -1,4 +1,4 @@
-// src/screens/ClassificationScreen.tsx
+// src/screens/TrainingScreen.tsx
 import AudioInputSelector from '@/components/AudioInputSelector';
 import Loader from '@/components/Loader';
 import React, { useState } from 'react';
@@ -12,54 +12,56 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Classification = {
-  type: 'mature' | 'immature' | 'overripe';
-  confidence: number;
-};
+const LABELS = ['mature', 'overripe'];
 
-export default function ClassificationScreen() {
+export default function TrainingScreen() {
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<Classification | null>(null);
 
   const sendToApi = async () => {
-    if (!audioUri) return;
+    if (!audioUri || !selectedLabel) {
+      Alert.alert('Missing data', 'Please select a label and an audio file.');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Step 1: get upload URL
-      const urlResponse = await fetch('https://n8n.vktnas.synology.me/webhook/durian-url');
+      const urlResponse = await fetch('https://n8n.vktnas.synology.me/webhook/durian-train-url');
       const { uploadUrl } = await urlResponse.json();
-      console.log('Upload URL:', uploadUrl);
 
-      // Step 2: upload file to obtained URL
       const form = new FormData();
       form.append('audio', {
         uri: audioUri,
         name: audioName ?? 'durian.wav',
         type: 'audio/wav'
       } as any);
+      form.append('label', selectedLabel);
 
-      const uploadResponse = await fetch(uploadUrl, {
+      await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'multipart/form-data' },
         body: form
       });
-      const json = await uploadResponse.json();
-      console.log('API Response:', json);
-      setResult({ type: json.type, confidence: json.confidence });
-    } catch {
-      Alert.alert('Error', 'Unable to contact the API.');
+
+      Alert.alert('Success', 'Training data uploaded!');
+      setAudioUri(null);
+      setAudioName(null);
+      setSelectedLabel(null);
+    } catch (err) {
+      Alert.alert('Error', 'Unable to upload training data.');
     } finally {
       setLoading(false);
     }
   };
 
-  const getLabel = (type: Classification['type']) => {
-    switch (type) {
+  const getLabelName = (label: string) => {
+    switch (label) {
       case 'mature': return 'Mature';
-      case 'immature': return 'Immature';
+      // case 'immature': return 'Immature';
       case 'overripe': return 'Overripe';
+      default: return label;
     }
   };
 
@@ -70,17 +72,37 @@ export default function ClassificationScreen() {
         style={styles.icon}
         resizeMode="contain"
       />
-      <Text style={styles.title}>Durian Ripe Classification</Text>
+      <Text style={styles.title}>Durian Training Upload</Text>
 
       <AudioInputSelector onAudioSelected={(uri, name) => {
         setAudioUri(uri);
-        console.log('Selected audio:', uri);
         setAudioName(name);
-        setResult(null);
       }} />
 
 
-      {audioUri && !loading && (
+      <View style={styles.labelContainer}>
+        {LABELS.map((label) => (
+          <TouchableOpacity
+            key={label}
+            style={[
+              styles.labelButton,
+              selectedLabel === label && styles.labelButtonSelected
+            ]}
+            onPress={() => setSelectedLabel(label)}
+          >
+            <Text
+              style={[
+                styles.labelButtonText,
+                selectedLabel === label && styles.labelButtonTextSelected
+              ]}
+            >
+              {getLabelName(label)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {audioUri && selectedLabel && !loading && (
         <TouchableOpacity
           style={[styles.button, styles.sendButton]}
           onPress={sendToApi}
@@ -90,15 +112,6 @@ export default function ClassificationScreen() {
       )}
 
       {loading && <Loader />}
-
-      {result && (
-        <View style={styles.resultCard}>
-          <Text style={styles.resultText}>{getLabel(result.type)}</Text>
-          <Text style={styles.confidenceText}>
-            Confidence: {(result.confidence * 100).toFixed(1)}%
-          </Text>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -153,26 +166,28 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: COLORS.textDark
   },
-  resultCard: {
-    marginTop: 24,
-    width: '90%',
-    padding: 16,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 8,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3
+  labelContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 16
   },
-  resultText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textDark
+  labelButton: {
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    margin: 6
   },
-  confidenceText: {
-    marginTop: 8,
-    fontSize: 16,
-    color: COLORS.textDark
+  labelButtonSelected: {
+    backgroundColor: COLORS.primary
+  },
+  labelButtonText: {
+    color: COLORS.textDark,
+    fontWeight: '600'
+  },
+  labelButtonTextSelected: {
+    color: COLORS.secondary
   }
 });
