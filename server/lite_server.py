@@ -1,4 +1,9 @@
+from dataclasses import dataclass
+from datetime import date
+import datetime
 from pathlib import Path
+import typing
+from click import DateTime
 import onnxruntime as ort
 import numpy as np
 import os
@@ -8,10 +13,14 @@ import numpy as np
 from quart import Quart, jsonify, request
 from pydub import AudioSegment
 from quart.datastructures import FileStorage
+from werkzeug.datastructures import MultiDict
+
 
 BASE_DIR = Path(__file__).resolve().parent
 print(f"Base directory: {BASE_DIR}")
 model_path = BASE_DIR / "server_models" / "model_v2_(0.51, 0.89)_.onnx"
+(train_submit_dir := Path(BASE_DIR) / "train_submitted").mkdir(exist_ok=True)
+(tmp_dir := BASE_DIR / "tmp").mkdir(exist_ok=True)
 
 # load onnx model
 session = ort.InferenceSession(model_path)
@@ -63,7 +72,6 @@ async def exec_full_data_pipeline(file: str | FileStorage):
         file_path = Path(file)
     else:
         file_path = BASE_DIR / "tmp" / f"tmp_{nb_tmp}.wav"
-        (BASE_DIR / "tmp").mkdir(exist_ok=True)
         await file.save(file_path)
         
     y, sr = load_audio(str(file_path))
@@ -73,6 +81,26 @@ async def exec_full_data_pipeline(file: str | FileStorage):
     fixed = get_mfcc_fixed(mfcc)
     return redim(fixed)
 
+async def save_conversion(file: FileStorage, out_dir: Path = tmp_dir, label: str = "") -> Path:
+    global nb_tmp
+    supported_file_types = ["wav", "m4a", "mp4", "wave", "x-m4a"]
+    file_type: str = file.content_type.split("/")[1] # type: ignore
+    if file_type not in supported_file_types:
+        raise Exception(f'File type {file_type} is not supported are supported. \nSupported types : [{', '.join(supported_file_types)}]')
+
+    now = datetime.datetime.now(datetime.UTC)
+    file_path: Path = (out_dir / f"{now.strftime("%Y-%m-%d_%H-%M-%S")}_{label}").with_suffix(f".{file_type}")
+    nb_tmp+=1
+    out_path = file_path.with_suffix(".wav")
+    if file_type not in ["wav", "wave"]:
+        await file.save(file_path)
+        sound = AudioSegment.from_file(file_path, format=file_type)
+        os.remove(file_path)
+        sound.export(out_path, format='wav')
+    else:
+        await file.save(out_path)
+    return out_path
+
 @app.route('/classify', methods=['POST'])
 async def upload():
     files = await request.files
@@ -80,27 +108,13 @@ async def upload():
         return jsonify({'error': 'No files received'}), 400
 
     file: FileStorage = files['audio']
-    filename = file.filename
-
-    supported_file_types = ["wav", "m4a", "mp4", "wave", "x-m4a"]
-    file_type: str = file.content_type.split("/")[1] # type: ignore
-    print(f"File content_type: {file.content_type}")
-    print(f"File type: {file_type}")
-    if file_type not in supported_file_types:
-        return jsonify({'error': f'File type {file_type} is not supported are supported. \nSupported types : [{', '.join(supported_file_types)}]'}), 400
+    try:
+        converted = await save_conversion(file)
+    except Exception as e:
+        return jsonify({'error': e}), 400
     
-    if file_type in ["m4a", "mp4"]:
-        tmp_dir = BASE_DIR / "tmp"
-        tmp_dir.mkdir(exist_ok=True)
-        file_path = (tmp_dir / f"tmp_m4a_to_wav_{nb_tmp}").with_suffix(f".{file_type}")
-        await file.save(file_path)
-        sound = AudioSegment.from_file(file_path, format=file_type)
-        os.remove(file_path)
-        sound.export(file_path.with_suffix(".wav"), format='wav')
-        x = await exec_full_data_pipeline(str(file_path.with_suffix(".wav")))
-    else:
-        x = await exec_full_data_pipeline(file)
-        
+    x = await exec_full_data_pipeline(str(converted))
+
     pred: np.ndarray = session.run(None, {input_name: x.astype(np.float32)})[0] # type: ignore
     result = float(pred[0][0])
 
@@ -114,8 +128,19 @@ async def upload():
         'type': durian_class,
         'confidence': confidence
     }
-    print(resp)
-    return jsonify(resp), 200
+    return resp, 200
+
+
+@app.post('/add-training-data')
+async def add_training_data():
+    form: MultiDict[typing.Any, typing.Any] = await request.form
+    files = await request.files
+    name, content = [*files.items()][0]
+    if name != "audio" or not isinstance(content, FileStorage):
+        return jsonify({'error': 'No files received'}), 400
+    label: str = form.get("y") #type: ignore
+    converted: Path = await save_conversion(content, out_dir = BASE_DIR / "train_submitted", label=label)
+    return {"message": "file successfully created"}, 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
