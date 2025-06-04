@@ -147,12 +147,6 @@ async def add_training_data():
 
 @app.get('/submitted-training-data')
 async def get_submitted_data():
-    # {
-    #   name: "enregistrement_001.mp3",
-    #   date: "2024-01-15T10:30:00Z",
-    #   size: 2048576, // 2MB
-    #   link: "https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3",
-    # }
     mature_files = train_submit_dir.glob("*_mature.wav")
     overripe_files = train_submit_dir.glob("*_overripe.wav")
     
@@ -161,13 +155,11 @@ async def get_submitted_data():
         dt = '_'.join(infos[:-1])
         dt = datetime.datetime.strptime(dt, DateUtils.datetime_storage_pattern).replace(tzinfo=timezone.utc)
         label = infos[-1]
-        size = path.stat().st_size
-        size_mo = round(size / (1024 * 1024), 2) 
         return {
             "name": path.name,
             "date": dt.strftime(DateUtils.datetime_response_pattern),
             "label": label,
-            "size": f"{size} // {size_mo}MB",
+            "size": path.stat().st_size,
             "link": str(path.relative_to(BASE_DIR))
         }
     return [process_file(file) for file in [*mature_files, *overripe_files]], 200
