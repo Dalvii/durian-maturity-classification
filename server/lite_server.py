@@ -182,6 +182,10 @@ async def get_file():
         return {"error": f"Resource access not allowed for \"{file_path}\""}, 400
     return await send_file(full_path)
 
+@app.get("/")
+async def home():
+    return await send_file(BASE_DIR / "front/index.html")
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 
