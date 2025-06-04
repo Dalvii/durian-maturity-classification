@@ -10,7 +10,7 @@ import os
 from typing import Literal
 import librosa
 import numpy as np
-from quart import Quart, jsonify, request
+from quart import Quart, jsonify, request, send_file
 from pydub import AudioSegment
 from quart.datastructures import FileStorage
 from werkzeug.datastructures import MultiDict
@@ -163,6 +163,16 @@ async def get_submitted_data():
             "link": str(path.relative_to(BASE_DIR))
         }
     return [process_file(file) for file in [*mature_files, *overripe_files]], 200
+
+@app.get("/get-audio")
+async def get_file():
+    file_path: str | None = request.args.get("url")
+    if file_path is None:
+        return {"error": f"Missing query parameter \"url\""}, 400
+    full_path = BASE_DIR / Path(file_path)
+    if not full_path.resolve().is_relative_to(train_submit_dir.resolve()):
+        return {"error": f"Resource access not allowed for \"{file_path}\""}, 400
+    return await send_file(full_path)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
