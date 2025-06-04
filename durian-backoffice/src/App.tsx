@@ -18,14 +18,14 @@ export default function Page() {
           <SidebarContent className="p-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Menu</h2>
+                <h2 className="text-lg font-semibold">Durian Classifier <br />Back-Office</h2>
                 {isMobile && <SidebarTrigger />}
               </div>
 
               <div className="space-y-2">
                 <Button
                   variant={activeTab === "records" ? "default" : "ghost"}
-                  className="w-full justify-start"
+                  className="w-full justify-start cursor-pointer"
                   onClick={() => setActiveTab("records")}
                 >
                   <Music className="w-4 h-4 mr-2" />
@@ -34,7 +34,7 @@ export default function Page() {
 
                 <Button
                   variant={activeTab === "models" ? "default" : "ghost"}
-                  className="w-full justify-start"
+                  className="w-full justify-start cursor-pointer"
                   onClick={() => setActiveTab("models")}
                 >
                   <Brain className="w-4 h-4 mr-2" />

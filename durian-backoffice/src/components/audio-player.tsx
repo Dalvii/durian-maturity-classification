@@ -65,7 +65,7 @@ export default function AudioPlayer({ audioUrl }: AudioPlayerProps) {
       variant="outline"
       onClick={handlePlayPause}
       disabled={isLoading}
-      className={isMobile ? "w-full" : ""}
+      className={isMobile ? "w-full cursor-pointer" : "cursor-pointer"}
     >
       {isLoading ? (
         <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />

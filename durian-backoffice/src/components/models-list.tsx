@@ -69,7 +69,7 @@ export default function ModelsList() {
             <div className="text-xs text-muted-foreground">{formatDate(model.date)}</div>
             <div className="text-xs text-muted-foreground">{formatFileSize(model.size)}</div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => handleDownload(model)} className="w-full">
+          <Button size="sm" variant="outline" onClick={() => handleDownload(model)} className="w-full cursor-pointer">
             <Download className="w-4 h-4 mr-2" />
             Download
           </Button>
