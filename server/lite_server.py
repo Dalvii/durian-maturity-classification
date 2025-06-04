@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timezone
 import datetime
 from pathlib import Path
 import typing
@@ -31,6 +31,10 @@ nb_tmp = 0
 max_t = 273 # value found in the data_preparation.py notebook
 
 app = Quart(__name__)
+
+class DateUtils:
+    datetime_storage_pattern = "%Y-%m-%d_%H-%M-%S"
+    datetime_response_pattern = "%Y-%m-%dT%H:%M:%SZ"
 
 def load_audio(path: str):
     y, sr = librosa.load(path, sr=None)
@@ -89,7 +93,7 @@ async def save_conversion(file: FileStorage, out_dir: Path = tmp_dir, label: str
         raise Exception(f'File type {file_type} is not supported are supported. \nSupported types : [{', '.join(supported_file_types)}]')
 
     now = datetime.datetime.now(datetime.UTC)
-    file_path: Path = (out_dir / f"{now.strftime("%Y-%m-%d_%H-%M-%S")}_{label}").with_suffix(f".{file_type}")
+    file_path: Path = (out_dir / f"{now.strftime(DateUtils.datetime_storage_pattern)}_{label}").with_suffix(f".{file_type}")
     nb_tmp+=1
     out_path = file_path.with_suffix(".wav")
     if file_type not in ["wav", "wave"]:
@@ -130,7 +134,6 @@ async def upload():
     }
     return resp, 200
 
-
 @app.post('/add-training-data')
 async def add_training_data():
     form: MultiDict[typing.Any, typing.Any] = await request.form
@@ -138,9 +141,36 @@ async def add_training_data():
     name, content = [*files.items()][0]
     if name != "audio" or not isinstance(content, FileStorage):
         return jsonify({'error': 'No files received'}), 400
-    label: str = form.get("y") #type: ignore
+    label: str = form.get("label") #type: ignore
     converted: Path = await save_conversion(content, out_dir = BASE_DIR / "train_submitted", label=label)
     return {"message": "file successfully created"}, 200
+
+@app.get('/submitted-training-data')
+async def get_submitted_data():
+    # {
+    #   name: "enregistrement_001.mp3",
+    #   date: "2024-01-15T10:30:00Z",
+    #   size: 2048576, // 2MB
+    #   link: "https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3",
+    # }
+    mature_files = train_submit_dir.glob("*_mature.wav")
+    overripe_files = train_submit_dir.glob("*_overripe.wav")
+    
+    def process_file(path: Path):
+        infos = path.stem.split("_")
+        dt = '_'.join(infos[:-1])
+        dt = datetime.datetime.strptime(dt, DateUtils.datetime_storage_pattern).replace(tzinfo=timezone.utc)
+        label = infos[-1]
+        size = path.stat().st_size
+        size_mo = round(size / (1024 * 1024), 2) 
+        return {
+            "name": path.name,
+            "date": dt.strftime(DateUtils.datetime_response_pattern),
+            "label": label,
+            "size": f"{size} // {size_mo}MB",
+            "link": str(path.relative_to(BASE_DIR))
+        }
+    return [process_file(file) for file in [*mature_files, *overripe_files]], 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
