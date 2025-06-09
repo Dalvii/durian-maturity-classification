@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import date, timezone
 import datetime
 from pathlib import Path
-from tkinter import Label
 import typing
 from click import DateTime
 import onnxruntime as ort
