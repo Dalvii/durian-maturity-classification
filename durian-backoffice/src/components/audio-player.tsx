@@ -7,7 +7,6 @@ import { useMobile } from "@/hooks/use-mobile"
 
 interface AudioPlayerProps {
   audioUrl: string
-  fileName: string
 }
 
 export default function AudioPlayer({ audioUrl }: AudioPlayerProps) {

@@ -63,7 +63,7 @@ export default function RecordsList() {
   const handleDownload = (record: AudioRecord) => {
     // Simulate download
     const link = document.createElement("a")
-    link.href = record.link
+    link.href = "/get-audio?url=" + encodeURIComponent(record.link)
     link.download = record.name
     document.body.appendChild(link)
     link.click()
@@ -89,7 +89,7 @@ export default function RecordsList() {
             <div className="text-xs text-muted-foreground">{formatFileSize(record.size)}</div>
           </div>
           <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
-            <AudioPlayer audioUrl={record.link} fileName={record.name} />
+            <AudioPlayer audioUrl={"/get-audio?url=" + encodeURIComponent(record.link)} />
             <Button
               size="sm"
               variant="outline"
