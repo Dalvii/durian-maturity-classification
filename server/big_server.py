@@ -23,14 +23,10 @@ def model_path(new=False) -> os.PathLike:
     dir_path = BASE_DIR / "server_models"
     # use the last version
     files = [(i.name, i.name.split("_v")[1].split('_')[0]) for i in os.scandir(dir_path)]
+    # filter keras models
+    files = [i for i in files if i[0].endswith(".keras")]
     sorted_files = sorted(files, key=lambda x : x[1])
-    if new:
-        # return the next version
-        if len(sorted_files) == 0:
-            return dir_path / "model_v1_0.h5"
-        last_version = int(sorted_files[-1][1])
-        return dir_path / f"model_v{last_version + 1}_.h5"
-    return dir_path / sorted_files[-1][1]
+    return dir_path / sorted_files[-1][0]
 
 (train_submit_dir := Path(BASE_DIR) / "train_submitted").mkdir(exist_ok=True)
 (tmp_dir := BASE_DIR / "tmp").mkdir(exist_ok=True)
