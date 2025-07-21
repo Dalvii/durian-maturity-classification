@@ -26,13 +26,23 @@ def model_path(new=False) -> os.PathLike:
     # filter keras models
     files = [i for i in files if i[0].endswith(".keras")]
     sorted_files = sorted(files, key=lambda x : x[1])
+    
+    if new:
+        last_version = int(sorted_files[-1][1])
+        new_version = last_version + 1
+        new_filename = f"model_v{new_version}_(0.,0.)_.keras"
+        return dir_path / new_filename
+    
     return dir_path / sorted_files[-1][0]
 
 (train_submit_dir := Path(BASE_DIR) / "train_submitted").mkdir(exist_ok=True)
 (tmp_dir := BASE_DIR / "tmp").mkdir(exist_ok=True)
 
 def training_phase() -> int:
-    return int(sorted(list(*os.scandir(train_submit_dir)))[-1].split("_")[-1])
+    files = list(os.scandir(train_submit_dir))
+    if files == []:
+        return 0
+    return int(sorted([f.name for f in files])[-1].split("_")[-1])
 
 # load model
 model: keras.models.Sequential = keras.saving.load_model(model_path()) # type: ignore
@@ -87,11 +97,12 @@ def get_mfcc_fixed(m: np.ndarray):
     return m2
 
 def redim(mfcc_fixed):
-    result =  np.stack([mfcc_fixed], axis=0)
-    result = result[..., np.newaxis]
+    # The model expects shape (batch_size, 40, 273, 1) not (batch_size, 1, 40, 273, 1)
+    # So we don't need to stack on axis 0 as we're already doing that when creating the batch
+    result = mfcc_fixed[..., np.newaxis]  # Add channel dimension at the end
     return result
 
-async def exec_full_data_pipeline(file: str | FileStorage):
+async def exec_full_data_pipeline(file: str | FileStorage, delete=True):
     global nb_tmp
     if (isinstance(file, str)):
         file_path = Path(file)
@@ -100,7 +111,8 @@ async def exec_full_data_pipeline(file: str | FileStorage):
         await file.save(file_path)
         
     y, sr = load_audio(str(file_path))
-    os.remove(file_path)
+    if delete:
+        os.remove(file_path)
     nb_tmp+=1
     mfcc = compute_mfcc(y, sr)
     fixed = get_mfcc_fixed(mfcc)
@@ -116,15 +128,14 @@ async def save_conversion(file: FileStorage, out_dir: Path = tmp_dir, label: str
     now = datetime.datetime.now(datetime.UTC)
     file_path: Path = (out_dir / f"{now.strftime(DateUtils.datetime_storage_pattern)}_{label}").with_suffix(f".{file_type}")
     nb_tmp+=1
-    out_path = file_path.with_suffix(".wav")
     if file_type not in ["wav", "wave"]:
         await file.save(file_path)
         sound = AudioSegment.from_file(file_path, format=file_type)
         os.remove(file_path)
-        sound.export(out_path, format='wav')
+        sound.export(file_path.with_suffix(".wav"), format='wav')
     else:
-        await file.save(out_path)
-    return out_path
+        await file.save(file_path.with_suffix(".wav"))
+    return file_path.with_suffix(".wav")
 
 @app.route('/classify', methods=['POST'])
 async def upload():
@@ -140,7 +151,7 @@ async def upload():
     
     x = await exec_full_data_pipeline(str(converted))
 
-    pred: np.ndarray = model.predict(x)[0] # type: ignore
+    pred: np.ndarray = model.predict(x) # type: ignore
     result = float(pred[0][0])
 
     durian_class: LabelUtils.LabelType | None = None
@@ -167,7 +178,9 @@ async def add_training_data():
     if label not in LabelUtils.allowed_labels:
         return {"error": f"label must be in : [{", ".join(LabelUtils.allowed_labels)}]"}, 400
         
-    converted: Path = await save_conversion(content, out_dir = BASE_DIR / "train_submitted" / f"phase_{training_phase}", label=label)
+    out_dir: Path = train_submit_dir / f"phase_{training_phase()}"
+    out_dir.mkdir(exist_ok=True)
+    converted: Path = await save_conversion(content, out_dir=out_dir, label=label)
     return {"message": "file successfully created"}, 200
 
 @app.get('/submitted-training-data')
@@ -199,73 +212,34 @@ async def get_file():
         return {"error": f"Resource access not allowed for \"{file_path}\""}, 400
     return await send_file(full_path)
 
-
-@app.put("/train-phase/")
+@app.put("/train-phase")
 async def train():
     nb_epochs: int = int(request.args.get("epochs", 10))
     if nb_epochs <= 0:
         return {"error": "epochs must be a positive integer"}, 400
     
     async def send_events():
-        import asyncio
-        import json
-        import threading
-        
-        queue = asyncio.Queue()
-        training_complete = asyncio.Event()
-        
-        class EpochCallback(keras.callbacks.Callback):
-            def on_epoch_begin(self, epoch, logs=None):
-                asyncio.run_coroutine_threadsafe(
-                    queue.put({
-                        "phase": "training",
-                        "progressPercentage": (epoch / nb_epochs) * 100,
-                        "message": f"Training epoch {epoch + 1}"
-                    }),
-                    asyncio.get_event_loop()
-                )
-            
-            def on_train_end(self, logs=None):
-                async def set_event():
-                    training_complete.set()
-                asyncio.run_coroutine_threadsafe(
-                    set_event(),
-                    asyncio.get_event_loop()
-                )
-        
-        # Prépare les données
-        x = []
-        y = []
-        for entry in tqdm(os.scandir(train_submit_dir / f"phase_{training_phase()}")):
-            x.append(await exec_full_data_pipeline(str(Path(entry.path).absolute())))
-            y.append(1 if "mature" in entry.name else 0)
-        
-        # Démarre l'entraînement dans un thread séparé
-        def train_model():
-            callback = EpochCallback()
-            model.fit(x, y, callbacks=[callback], epochs=nb_epochs, verbose="auto")
-            # Crée un nouveau dossier pour la phase suivante
-            (train_submit_dir / f"phase_{training_phase() + 1}").mkdir(exist_ok=True)
-        
-        # Démarre le thread d'entraînement
-        threading.Thread(target=train_model).start()
-        
-        # Envoie les événements au fur et à mesure qu'ils arrivent
-        while not training_complete.is_set() or not queue.empty():
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=1.0)
-                yield f"data: {json.dumps(event)}\n\n"
-            except asyncio.TimeoutError:
-                # Continue d'attendre si aucun événement n'est disponible mais l'entraînement n'est pas terminé
-                continue
-        
-        # save model
-        model.save(model_path(new=True))
 
 
+        x_arrays = []
+        y_values = []
+        for entry in tqdm(list(os.scandir(train_submit_dir / f"phase_{training_phase()}"))):
+            x_arrays.append(await exec_full_data_pipeline(str(Path(entry.path).absolute()), delete=False))
+            y_values.append(1 if "mature" in entry.name else 0)
+
+        if len(x_arrays) > 0:
+            x = np.array(x_arrays)
+            y = np.array(y_values)
+            def train_model():
+                model.fit(x, y, epochs=nb_epochs, verbose="auto")
+                (train_submit_dir / f"phase_{training_phase() + 1}").mkdir(exist_ok=True)
         
-        # Envoie un événement final
-        yield f"data: {json.dumps({'phase': 'complete', 'message': 'Training complete'})}\n\n"
+            train_model()
+            model.save(model_path(new=True))
+            yield {"data": {'phase': 'complete', 'message': 'Training complete'}}, 200
+        else:
+            yield {"error": "No training data found in the current phase"}, 400
+
 
     return await make_response(
         send_events(),
