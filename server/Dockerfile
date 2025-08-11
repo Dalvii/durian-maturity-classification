@@ -20,4 +20,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["python", "lite_server.py"]
+CMD ["python", "big_server.py"]
