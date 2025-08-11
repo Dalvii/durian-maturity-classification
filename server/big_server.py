@@ -15,6 +15,7 @@ from pydub import AudioSegment
 from quart.datastructures import FileStorage
 from tqdm import tqdm
 from werkzeug.datastructures import MultiDict
+from quart_cors import cors
 
 BASE_DIR = Path(__file__).resolve().parent
 print(f"Base directory: {BASE_DIR}")
@@ -52,6 +53,14 @@ nb_tmp = 0
 max_t = 273 # value found in the data_preparation.py notebook
 
 app = Quart(__name__)
+
+app = cors(
+    app,
+    allow_origin="http://localhost:5173",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
 
 class DateUtils:
     datetime_storage_pattern = "%Y-%m-%d_%H-%M-%S"
@@ -214,6 +223,13 @@ async def get_file():
 
 @app.put("/train-phase")
 async def train():
+    if request.method == "OPTIONS":
+        return "", 204, {  # idem: pas de make_response
+            "Access-Control-Allow-Origin": "http://localhost:5173",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+        }
     nb_epochs: int = int(request.args.get("epochs", 10))
     if nb_epochs <= 0:
         return {"error": "epochs must be a positive integer"}, 400
@@ -252,14 +268,20 @@ async def get_phases():
             "link": str(path.relative_to(BASE_DIR))
         }
 
+    # Trier les dossiers par leur numéro de phase
+    dirs = sorted(
+        [d for d in train_submit_dir.iterdir() if d.is_dir()],
+        key=lambda p: int(p.name.split("_")[1])
+    )
+
     phases = []
-    for d in train_submit_dir.iterdir():
-        if d.is_dir():
-            files = [process_file(f) for f in d.glob("*.wav")]
-            phases.append({
-                "name": d.name,
-                "files": files
-            })
+    for d in dirs:
+        files = [process_file(f) for f in d.glob("*.wav")]
+        phases.append({
+            "name": d.name,
+            "files": files
+        })
+
     return phases, 200
 
 @app.get("/get-models")
@@ -283,7 +305,7 @@ async def home():
     return await send_file(BASE_DIR / "front/index.html")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5001)
 
 
 
