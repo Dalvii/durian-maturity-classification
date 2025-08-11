@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, X, AlertCircle } from "lucide-react"
+import { Upload, X, AlertCircle, WifiOff } from "lucide-react"
 import { addTrainingData } from "@/services/training"
+import { useOfflineQueue } from "@/hooks/use-offline-queue"
 
 interface AudioUploadFormProps {
   onSuccess: () => void
@@ -21,6 +22,7 @@ export default function AudioUploadForm({ onSuccess, onCancel }: AudioUploadForm
   const [label, setLabel] = useState<string>("")
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string>("")
+  const { addToQueue, isOnline } = useOfflineQueue()
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -47,9 +49,27 @@ export default function AudioUploadForm({ onSuccess, onCancel }: AudioUploadForm
     setError("")
 
     try {
-      const result = await addTrainingData(file, label as "mature" | "overripe")
-      console.log("Upload successful:", result.message)
-      onSuccess()
+      if (isOnline) {
+        // Essayer d'envoyer directement
+        try {
+          const result = await addTrainingData(file, label as "mature" | "overripe")
+          console.log("Upload successful:", result.message)
+          onSuccess()
+          return
+        } catch {
+          // Si l'envoi échoue, ajouter à la queue
+          console.log("Direct upload failed, adding to queue")
+        }
+      }
+
+      // Ajouter à la queue locale
+      const success = await addToQueue(file, file.name, "training", { label: label as "mature" | "overripe" })
+      if (success) {
+        console.log("Added to offline queue")
+        onSuccess()
+      } else {
+        setError("Failed to save file locally")
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : "Failed to upload file. Please try again.")
     } finally {
@@ -59,6 +79,15 @@ export default function AudioUploadForm({ onSuccess, onCancel }: AudioUploadForm
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {!isOnline && (
+        <Alert>
+          <WifiOff className="h-4 w-4" />
+          <AlertDescription>
+            You're offline. Files will be saved locally and uploaded when connection is restored.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="space-y-2">
         <Label htmlFor="audio-file">Audio File</Label>
         <Input id="audio-file" type="file" accept="audio/*" onChange={handleFileChange} disabled={uploading} />
@@ -94,12 +123,12 @@ export default function AudioUploadForm({ onSuccess, onCancel }: AudioUploadForm
           {uploading ? (
             <>
               <Upload className="w-4 h-4 mr-2 animate-pulse" />
-              Uploading...
+              {isOnline ? "Uploading..." : "Saving..."}
             </>
           ) : (
             <>
               <Upload className="w-4 h-4 mr-2" />
-              Upload
+              {isOnline ? "Upload" : "Save Offline"}
             </>
           )}
         </Button>
