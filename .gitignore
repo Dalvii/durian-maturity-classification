@@ -1,4 +1,6 @@
-augmented_dataset
+.expo
+node_modules
+augmented_train_dataset
 augmented_train_dataset
 server/tmp/**
 server/train_submitted

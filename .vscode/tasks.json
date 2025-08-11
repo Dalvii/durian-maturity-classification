@@ -1,0 +1,18 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run big_server.py on open",
+			"type": "shell",
+			"command": "${workspaceFolder}/.venv/Scripts/python.exe",
+			"args": [
+				"server/big_server.py"
+			],
+			"isBackground": true,
+			"group": "build",
+			"presentation": {
+				"reveal": "always"
+			}
+		}
+	]
+}

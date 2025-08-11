@@ -1,46 +1,51 @@
-export interface ModelFile {
-  name: string
-  date: string
-  size: number
-  link: string
+import { buildApiUrl } from "@/lib/config"
+
+export interface ModelsResponse {
+  models: string[]
+  current: string
 }
 
-// Service mocké pour les modèles entraînés
-export async function getModels(): Promise<ModelFile[]> {
-  // Simuler un délai de réseau
-  await new Promise((resolve) => setTimeout(resolve, 300))
+// Service pour les modèles
+export async function getModels(): Promise<ModelsResponse> {
+  try {
+    const response = await fetch(buildApiUrl("/get-models"))
 
-  // Données mockées
-  return [
-    {
-      name: "model_speech_recognition_v1.pkl",
-      date: "2024-01-15T08:30:00Z",
-      size: 52428800, // 50MB
-      link: "/models/model_speech_recognition_v1.pkl",
-    },
-    {
-      name: "neural_network_audio_v2.h5",
-      date: "2024-01-14T12:15:00Z",
-      size: 104857600, // 100MB
-      link: "/models/neural_network_audio_v2.h5",
-    },
-    {
-      name: "transformer_model_fr.bin",
-      date: "2024-01-13T15:45:00Z",
-      size: 209715200, // 200MB
-      link: "/models/transformer_model_fr.bin",
-    },
-    {
-      name: "classification_model.joblib",
-      date: "2024-01-12T10:20:00Z",
-      size: 26214400, // 25MB
-      link: "/models/classification_model.joblib",
-    },
-    {
-      name: "deep_learning_audio_v3.pth",
-      date: "2024-01-11T14:30:00Z",
-      size: 157286400, // 150MB
-      link: "/models/deep_learning_audio_v3.pth",
-    },
-  ]
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const data: ModelsResponse = await response.json()
+    return data
+  } catch (error) {
+    console.error("Error fetching models:", error)
+    throw new Error("Failed to load models")
+  }
+}
+
+export async function downloadModel(modelName: string): Promise<void> {
+  try {
+    const response = await fetch(buildApiUrl(`/get-model?url=${encodeURIComponent(modelName)}`))
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+    }
+
+    // Créer le téléchargement
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+
+    const link = document.createElement("a")
+    link.href = url
+    link.download = modelName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    // Nettoyer l'URL
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error("Error downloading model:", error)
+    throw error instanceof Error ? error : new Error("Failed to download model")
+  }
 }
