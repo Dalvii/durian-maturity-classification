@@ -18,11 +18,11 @@ from werkzeug.datastructures import MultiDict
 
 BASE_DIR = Path(__file__).resolve().parent
 print(f"Base directory: {BASE_DIR}")
+models_dir = BASE_DIR / "server_models"
 
 def model_path(new=False) -> os.PathLike:
-    dir_path = BASE_DIR / "server_models"
     # use the last version
-    files = [(i.name, i.name.split("_v")[1].split('_')[0]) for i in os.scandir(dir_path)]
+    files = [(i.name, i.name.split("_v")[1].split('_')[0]) for i in os.scandir(models_dir)]
     # filter keras models
     files = [i for i in files if i[0].endswith(".keras")]
     sorted_files = sorted(files, key=lambda x : x[1])
@@ -31,9 +31,9 @@ def model_path(new=False) -> os.PathLike:
         last_version = int(sorted_files[-1][1])
         new_version = last_version + 1
         new_filename = f"model_v{new_version}_(0.,0.)_.keras"
-        return dir_path / new_filename
-    
-    return dir_path / sorted_files[-1][0]
+        return models_dir / new_filename
+
+    return models_dir / sorted_files[-1][0]
 
 (train_submit_dir := Path(BASE_DIR) / "train_submitted").mkdir(exist_ok=True)
 (tmp_dir := BASE_DIR / "tmp").mkdir(exist_ok=True)
@@ -217,38 +217,67 @@ async def train():
     nb_epochs: int = int(request.args.get("epochs", 10))
     if nb_epochs <= 0:
         return {"error": "epochs must be a positive integer"}, 400
-    
-    async def send_events():
 
+    x_arrays = []
+    y_values = []
+    phase_dir = train_submit_dir / f"phase_{training_phase()}"
+    for entry in tqdm(list(os.scandir(phase_dir))):
+        x_arrays.append(await exec_full_data_pipeline(str(Path(entry.path).absolute()), delete=False))
+        y_values.append(1 if "mature" in entry.name else 0)
 
-        x_arrays = []
-        y_values = []
-        for entry in tqdm(list(os.scandir(train_submit_dir / f"phase_{training_phase()}"))):
-            x_arrays.append(await exec_full_data_pipeline(str(Path(entry.path).absolute()), delete=False))
-            y_values.append(1 if "mature" in entry.name else 0)
+    if len(x_arrays) > 0:
+        x = np.array(x_arrays)
+        y = np.array(y_values)
+        def train_model():
+            model.fit(x, y, epochs=nb_epochs, verbose="auto")
+            (train_submit_dir / f"phase_{training_phase() + 1}").mkdir(exist_ok=True)
+        train_model()
+        model.save(model_path(new=True))
+        return {"phase": "complete", "message": "Training complete"}, 200
+    else:
+        return {"error": "No training data found in the current phase"}, 400
 
-        if len(x_arrays) > 0:
-            x = np.array(x_arrays)
-            y = np.array(y_values)
-            def train_model():
-                model.fit(x, y, epochs=nb_epochs, verbose="auto")
-                (train_submit_dir / f"phase_{training_phase() + 1}").mkdir(exist_ok=True)
-        
-            train_model()
-            model.save(model_path(new=True))
-            yield {"data": {'phase': 'complete', 'message': 'Training complete'}}, 200
-        else:
-            yield {"error": "No training data found in the current phase"}, 400
+@app.get("/get-phases")
+async def get_phases():
+    def process_file(path: Path):
+        infos = path.stem.split("_")
+        dt = '_'.join(infos[:-1])
+        dt = datetime.datetime.strptime(dt, DateUtils.datetime_storage_pattern).replace(tzinfo=timezone.utc)
+        label = infos[-1]
+        return {
+            "name": path.name,
+            "date": dt.strftime(DateUtils.datetime_response_pattern),
+            "label": label,
+            "size": path.stat().st_size,
+            "link": str(path.relative_to(BASE_DIR))
+        }
 
+    phases = []
+    for d in train_submit_dir.iterdir():
+        if d.is_dir():
+            files = [process_file(f) for f in d.glob("*.wav")]
+            phases.append({
+                "name": d.name,
+                "files": files
+            })
+    return phases, 200
 
-    return await make_response(
-        send_events(),
-        {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Transfer-Encoding': 'chunked',
-        },
-    )
+@app.get("/get-models")
+async def get_models():
+    models = [f.name for f in models_dir.iterdir() if f.is_file() and f.name.endswith(".keras")]
+    current_model = Path(model_path()).name
+    return {"models": models, "current": current_model}, 200
+
+@app.get("/get-model")
+async def get_model():
+    model_name: str | None = request.args.get("url")
+    if model_name is None:
+        return {"error": "Missing query parameter 'url'"}, 400
+    model_path = models_dir / model_name
+    if not model_path.exists():
+        return {"error": "Model not found"}, 404
+    return await send_file(model_path)
+
 @app.get("/")
 async def home():
     return await send_file(BASE_DIR / "front/index.html")
