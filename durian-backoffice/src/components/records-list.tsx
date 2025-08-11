@@ -89,7 +89,7 @@ export default function RecordsList() {
             <div className="text-xs text-muted-foreground">{formatFileSize(record.size)}</div>
           </div>
           <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
-            <AudioPlayer audioUrl={"/get-audio?url=" + encodeURIComponent(record.link)} />
+            <AudioPlayer audioUrl={"/get-audio?url=" + encodeURIComponent(record.link)} fileName={record.name} />
             <Button
               size="sm"
               variant="outline"

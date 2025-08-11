@@ -30,8 +30,8 @@ export default function PredictPage() {
 
   return (
     <div className="space-y-6">
-      {/* Statut de la queue offline */}
-      <OfflineQueueStatus />
+      {/* Queue spécifique à la classification */}
+      <OfflineQueueStatus type="classification" title="Classification Queue" />
 
       <div className="text-center">
         <p className="text-muted-foreground">

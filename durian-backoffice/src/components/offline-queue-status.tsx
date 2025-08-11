@@ -20,20 +20,27 @@ import {
 } from "lucide-react"
 import { useOfflineQueue } from "@/hooks/use-offline-queue"
 
-export default function OfflineQueueStatus() {
+interface OfflineQueueStatusProps {
+  type: "training" | "classification"
+  title?: string
+}
+
+export default function OfflineQueueStatus({ type, title }: OfflineQueueStatusProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const {
     queuedFiles,
-    pendingCount,
-    uploadingCount,
     isProcessing,
     isOnline,
     removeFromQueue,
-    clearQueue,
     processQueue,
   } = useOfflineQueue()
 
-  if (queuedFiles.length === 0) return null
+  // Filtrer les fichiers par type
+  const filteredFiles = queuedFiles.filter((file) => file.type === type)
+  const filteredPendingCount = filteredFiles.filter((f) => f.status === "pending" || f.status === "failed").length
+  const filteredUploadingCount = filteredFiles.filter((f) => f.status === "uploading").length
+
+  if (filteredFiles.length === 0) return null
 
   const formatFileSize = (blob: Blob) => {
     const bytes = blob.size
@@ -79,6 +86,19 @@ export default function OfflineQueueStatus() {
     }
   }
 
+  const clearTypeQueue = async () => {
+    // Supprimer seulement les fichiers de ce type
+    const filesToRemove = filteredFiles.map((file) => file.id)
+    for (const id of filesToRemove) {
+      await removeFromQueue(id)
+    }
+  }
+
+  const getQueueTitle = () => {
+    if (title) return title
+    return type === "training" ? "Training Queue" : "Classification Queue"
+  }
+
   return (
     <Card className="mb-6">
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -93,12 +113,14 @@ export default function OfflineQueueStatus() {
                   ) : (
                     <WifiOff className="w-5 h-5 text-red-500" />
                   )}
-                  Offline Queue
+                  {getQueueTitle()}
                 </CardTitle>
               </div>
               <div className="flex items-center gap-2">
-                {pendingCount > 0 && <Badge variant="secondary">{pendingCount} pending</Badge>}
-                {uploadingCount > 0 && <Badge className="text-blue-700 bg-blue-100">{uploadingCount} uploading</Badge>}
+                {filteredPendingCount > 0 && <Badge variant="secondary">{filteredPendingCount} pending</Badge>}
+                {filteredUploadingCount > 0 && (
+                  <Badge className="text-blue-700 bg-blue-100">{filteredUploadingCount} uploading</Badge>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -110,7 +132,8 @@ export default function OfflineQueueStatus() {
               <Alert className="mb-4">
                 <WifiOff className="h-4 w-4" />
                 <AlertDescription>
-                  You're offline. Files will be automatically uploaded when connection is restored.
+                  You're offline. Files will be automatically {type === "training" ? "uploaded" : "classified"} when
+                  connection is restored.
                 </AlertDescription>
               </Alert>
             )}
@@ -123,22 +146,22 @@ export default function OfflineQueueStatus() {
                 className="flex items-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${isProcessing ? "animate-spin" : ""}`} />
-                {isProcessing ? "Processing..." : "Retry Upload"}
+                {isProcessing ? "Processing..." : `Retry ${type === "training" ? "Upload" : "Classification"}`}
               </Button>
-              <Button size="sm" variant="outline" onClick={clearQueue} disabled={isProcessing}>
+              <Button size="sm" variant="outline" onClick={clearTypeQueue} disabled={isProcessing}>
                 <Trash2 className="w-4 h-4 mr-2" />
                 Clear Queue
               </Button>
             </div>
 
             <div className="space-y-2">
-              {queuedFiles.map((file) => (
+              {filteredFiles.map((file) => (
                 <div key={file.id} className="border rounded-lg p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <div className="font-medium text-sm truncate">{file.fileName}</div>
                       <div className="text-xs text-muted-foreground">
-                        {file.type === "training" ? "Training Data" : "Classification"} •{" "}
+                        {type === "training" ? "Training Data" : "Classification"} •{" "}
                         {formatDate(file.metadata.timestamp)} • {formatFileSize(file.file)}
                       </div>
                       {file.metadata.label && (

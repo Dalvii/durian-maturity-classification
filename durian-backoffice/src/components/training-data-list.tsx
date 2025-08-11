@@ -33,6 +33,7 @@ export default function TrainingDataList() {
       setLoading(false)
       setHasTriedLoading(true)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, hasTriedLoading])
 
   const fetchPhases = async () => {
@@ -120,8 +121,8 @@ export default function TrainingDataList() {
 
   return (
     <div className="space-y-4">
-      {/* Statut de la queue offline */}
-      <OfflineQueueStatus />
+      {/* Queue spécifique au training */}
+      <OfflineQueueStatus type="training" title="Training Queue" />
 
       {/* Message d'information si offline ou erreur */}
       {!isOnline && (
